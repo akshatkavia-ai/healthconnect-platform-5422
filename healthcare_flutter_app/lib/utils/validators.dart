@@ -3,7 +3,8 @@ class Validators {
   /// Simple email validation.
   static String? email(String? v) {
     if (v == null || v.isEmpty) return 'Email is required';
-    final regex = RegExp(r'^[\\w-.]+@([\\w-]+\\.)+[\\w-]{2,4}\$');
+    // Valid simple pattern for general emails (not exhaustive by RFC).
+    final regex = RegExp(r'^[\w\-.]+@([\w-]+\.)+[\w-]{2,4}$');
     if (!regex.hasMatch(v)) return 'Enter a valid email';
     return null;
   }

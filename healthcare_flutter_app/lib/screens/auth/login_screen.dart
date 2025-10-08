@@ -55,7 +55,24 @@ class _LoginScreenState extends State<LoginScreen> {
         }
 
         return Scaffold(
-          appBar: AppBar(title: const Text('Welcome Back')),
+          appBar: AppBar(
+            title: const Text('Welcome Back'),
+            actions: [
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'health') {
+                    context.go('/health');
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: 'health',
+                    child: Text('Health check'),
+                  ),
+                ],
+              ),
+            ],
+          ),
           body: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 480),

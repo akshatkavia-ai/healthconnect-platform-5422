@@ -11,23 +11,25 @@ class PatientService {
         .upsert(patient.toMap())
         .select()
         .single();
-    return Patient.fromMap(data);
+    return Patient.fromMap(data as Map<String, dynamic>);
   }
 
   /// PUBLIC_INTERFACE
   Future<Patient?> getPatientByUserId(String userId) async {
     final data = await SupabaseService.table(tableName)
-        .select()
         .eq('user_id', userId)
+        .select()
         .maybeSingle();
-    return data == null ? null : Patient.fromMap(data);
+    return data == null ? null : Patient.fromMap(data as Map<String, dynamic>);
   }
 
   /// PUBLIC_INTERFACE
   Future<List<Patient>> searchPatientsByName(String query) async {
     final rows = await SupabaseService.table(tableName)
-        .select()
-        .ilike('name', '%$query%');
-    return (rows as List<dynamic>).map((e) => Patient.fromMap(e as Map<String, dynamic>)).toList();
+        .ilike('name', '%$query%')
+        .select();
+    return (rows as List<dynamic>)
+        .map((e) => Patient.fromMap(e as Map<String, dynamic>))
+        .toList();
   }
 }

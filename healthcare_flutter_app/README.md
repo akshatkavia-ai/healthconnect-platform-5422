@@ -1,16 +1,36 @@
 # healthcare_flutter_app
 
-A new Flutter project.
+Flutter app for HealthConnect.
 
-## Getting Started
+## Environment setup
 
-This project is a starting point for a Flutter application.
+This app uses Supabase. Create a `.env` file at the project root (same level as `pubspec.yaml`) based on `.env.example`:
 
-A few resources to get you started if this is your first Flutter project:
+```
+SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+SUPABASE_KEY=YOUR_SUPABASE_ANON_KEY
+# Optional legacy alias (still supported)
+# SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Notes:
+- SUPABASE_KEY is the preferred variable for the anon/public key.
+- For backward compatibility, `SUPABASE_ANON_KEY` is also accepted if `SUPABASE_KEY` is not set.
+- The app loads `.env` at startup and shows a friendly UI if variables are missing.
+
+## Health Check
+
+From the Login screen, open the overflow menu and tap “Health check”. This page shows:
+- Supabase URL host
+- A non-destructive connectivity check (attempts to read from `profiles` with `limit(1)`)
+- Status OK/Fail with guidance
+
+If you see “permission denied”, ensure your anon role has appropriate RLS permissions or sign in to test with an authenticated session.
+
+## Run
+
+- flutter pub get
+- flutter run
 
 For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+[online documentation](https://docs.flutter.dev/), which offers tutorials, samples, guidance on mobile development, and a full API reference.

@@ -9,5 +9,6 @@ class SupabaseService {
 
   /// PUBLIC_INTERFACE
   /// Convenience method to get a query builder for a table.
-  static PostgrestFilterBuilder table(String table) => client.from(table);
+  /// Returns SupabaseQueryBuilder to support insert/update/upsert/delete and filters.
+  static SupabaseQueryBuilder table(String table) => client.from(table);
 }
