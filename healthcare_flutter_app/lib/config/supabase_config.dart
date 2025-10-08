@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// PUBLIC_INTERFACE
@@ -15,12 +13,6 @@ class SupabaseConfig {
   static String _lastConnectionMessage = '';
   static bool _initialized = false;
   static Completer<void>? _initCompleter;
-
-  /// Maximum retries for initialization
-  static const int _maxInitRetries = 3;
-
-  /// Base delay for exponential backoff (milliseconds)
-  static const int _baseDelayMs = 1000;
 
   /// Normalize and validate a Supabase URL
   static String _normalizeUrl(String url) {
@@ -68,23 +60,12 @@ class SupabaseConfig {
     return errors;
   }
 
-  /// Check basic connectivity to Supabase URL
-  static Future<bool> _checkConnectivity(String url) async {
-    try {
-      final uri = Uri.parse('$url/auth/v1/');
-      final response = await http.head(uri);
-      // Accept any response that isn't a server error
-      return response.statusCode < 500;
-    } catch (e) {
-      debugPrint('Connectivity check failed: $e');
-      return false;
-    }
-  }
-
   /// PUBLIC_INTERFACE
   /// Initialize Supabase client using the hardcoded constants in this file.
   ///
-  /// This is idempotent and safe to call multiple times concurrently.
+  /// - No .env dependency
+  /// - No pre-connectivity blocker (Supabase.initialize itself is fast and local)
+  /// - Idempotent and safe to call multiple times concurrently.
   /// Connection status messages are available via [lastConnectionMessage].
   static Future<void> initialize() async {
     // Idempotent guard: if already initialized, return immediately.
@@ -98,14 +79,15 @@ class SupabaseConfig {
     _initCompleter = Completer<void>();
 
     try {
-      var rawUrl = _normalizeUrl(supabaseUrl);
+      final rawUrl = _normalizeUrl(supabaseUrl);
       final key = supabaseKey.trim();
 
       // Basic validation for presence
       if (rawUrl.isEmpty || key.isEmpty) {
         final msg =
             'Supabase configuration constants are missing. Ensure supabaseUrl and supabaseKey are set in lib/config/supabase_config.dart.';
-        _lastConnectionMessage = '[Supabase] Initialization failed: Missing configuration constants';
+        _lastConnectionMessage =
+            '[Supabase] Initialization failed: Missing configuration constants';
         if (kDebugMode) {
           debugPrint(msg);
         }
@@ -118,72 +100,46 @@ class SupabaseConfig {
         final msg =
             'Invalid Supabase URL in lib/config/supabase_config.dart: "$rawUrl". Issues: ${errors.join('; ')}.\n'
             'Example of a valid URL: https://dzrdewhocvijofmcmxeu.supabase.co';
-        _lastConnectionMessage = '[Supabase] Initialization failed: Invalid URL format (${errors.join(', ')})';
+        _lastConnectionMessage =
+            '[Supabase] Initialization failed: Invalid URL format (${errors.join(', ')})';
         if (kDebugMode) {
           debugPrint(msg);
         }
         throw StateError(msg);
       }
 
-      // Initialize with retries
-      Exception? lastError;
-      for (var attempt = 1; attempt <= _maxInitRetries; attempt++) {
-        try {
-          if (kDebugMode) {
-            debugPrint('Supabase initialization attempt $attempt of $_maxInitRetries...');
-          }
+      // Initialize Supabase once (no pre-connectivity guard)
+      await Supabase.initialize(
+        url: rawUrl,
+        anonKey: key,
+        debug: kDebugMode,
+      );
 
-          // Check connectivity first
-          final isConnected = await _checkConnectivity(rawUrl);
-          if (!isConnected) {
-            throw StateError('Failed to connect to Supabase URL: $rawUrl');
-          }
+      _effectiveUrl = rawUrl;
 
-          await Supabase.initialize(
-            url: rawUrl,
-            anonKey: key,
-            debug: kDebugMode,
-          );
-
-          _effectiveUrl = rawUrl;
-
-          // Extract host from URL for connection message
-          String host = rawUrl;
-          try {
-            final uri = Uri.parse(rawUrl);
-            host = uri.host.isNotEmpty ? uri.host : rawUrl;
-          } catch (_) {
-            // Keep rawUrl if parsing fails
-          }
-
-          _lastConnectionMessage = '[Supabase] Connected to $host';
-          if (kDebugMode) {
-            debugPrint(_lastConnectionMessage);
-          }
-
-          _initialized = true;
-          _initCompleter!.complete();
-          return; // Success
-        } catch (e) {
-          lastError = e is Exception ? e : Exception(e.toString());
-          if (attempt < _maxInitRetries) {
-            // Exponential backoff
-            final delayMs = (_baseDelayMs * pow(2, attempt - 1)).toInt();
-            if (kDebugMode) {
-              debugPrint('Initialization attempt $attempt failed, retrying in ${delayMs}ms: $e');
-            }
-            await Future.delayed(Duration(milliseconds: delayMs));
-          }
-        }
+      // Extract host from URL for connection message
+      String host = rawUrl;
+      try {
+        final uri = Uri.parse(rawUrl);
+        host = uri.host.isNotEmpty ? uri.host : rawUrl;
+      } catch (_) {
+        // Keep rawUrl if parsing fails
       }
 
-      // If we get here, all retries failed
-      final msg = 'Failed to initialize Supabase after $_maxInitRetries attempts. Last error: $lastError';
-      _lastConnectionMessage = '[Supabase] Initialization failed: $lastError';
-      debugPrint(msg);
-      throw StateError(msg);
+      _lastConnectionMessage = '[Supabase] Connected to $host';
+      if (kDebugMode) {
+        debugPrint(_lastConnectionMessage);
+      }
+
+      _initialized = true;
+      _initCompleter!.complete();
+      return; // Success
     } catch (e) {
-      // Ensure any waiters see the error
+      // Friendly message and propagate error so the app can surface a configuration screen if truly invalid.
+      _lastConnectionMessage = '[Supabase] Initialization failed: $e';
+      if (kDebugMode) {
+        debugPrint(_lastConnectionMessage);
+      }
       if (!(_initCompleter?.isCompleted ?? true)) {
         _initCompleter!.completeError(e);
       }
@@ -204,4 +160,8 @@ class SupabaseConfig {
   /// On success: '[Supabase] Connected to {host}'
   /// On failure: '[Supabase] Initialization failed: {reason}'
   static String get lastConnectionMessage => _lastConnectionMessage;
+
+  /// PUBLIC_INTERFACE
+  /// Whether Supabase.initialize has successfully completed.
+  static bool get isInitialized => _initialized;
 }

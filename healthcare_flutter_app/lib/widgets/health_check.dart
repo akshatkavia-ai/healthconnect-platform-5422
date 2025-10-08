@@ -108,6 +108,17 @@ class _HealthCheckState extends State<HealthCheck> {
             const SizedBox(height: 12),
             Card(
               child: ListTile(
+                leading: const Icon(Icons.cloud_done),
+                title: const Text('Client Status'),
+                subtitle: Text(
+                  '${SupabaseConfig.isInitialized ? 'Initialized' : 'Not initialized'}'
+                  '${SupabaseConfig.lastConnectionMessage.isNotEmpty ? '\n${SupabaseConfig.lastConnectionMessage}' : ''}',
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
                 leading: Icon(
                   _ok == true
                       ? Icons.check_circle
