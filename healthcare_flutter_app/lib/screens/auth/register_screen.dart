@@ -39,6 +39,70 @@ class _RegisterScreenState extends State<RegisterScreen> {
     // Navigation handled in build based on state.
   }
 
+  Widget _buildErrorDisplay(String error) {
+    final isNetworkError = error.toLowerCase().contains('host lookup') ||
+                          error.toLowerCase().contains('network') ||
+                          error.toLowerCase().contains('connection');
+    
+    final isServerError = error.toLowerCase().contains('500') ||
+                         error.toLowerCase().contains('503') ||
+                         error.toLowerCase().contains('unavailable');
+
+    String suggestion = '';
+    if (isNetworkError) {
+      suggestion = 'Please check your internet connection and try again.';
+    } else if (isServerError) {
+      suggestion = 'The service is temporarily unavailable. Please try again in a few minutes.';
+    } else if (error.toLowerCase().contains('already registered')) {
+      suggestion = 'Try logging in instead or use a different email address.';
+    }
+
+    return Card(
+      color: ThemeConfig.error.withAlpha(30),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.error_outline, color: ThemeConfig.error),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Registration failed',
+                    style: TextStyle(
+                      color: ThemeConfig.error,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              error,
+              style: TextStyle(
+                color: ThemeConfig.error.withAlpha(220),
+              ),
+            ),
+            if (suggestion.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  suggestion,
+                  style: const TextStyle(
+                    fontStyle: FontStyle.italic,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
@@ -103,11 +167,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             const SizedBox(height: 20),
                             if (auth.error != null)
                               Padding(
-                                padding: const EdgeInsets.only(bottom: 8.0),
-                                child: Text(
-                                  auth.error!,
-                                  style: const TextStyle(color: ThemeConfig.error),
-                                ),
+                                padding: const EdgeInsets.only(bottom: 12.0),
+                                child: _buildErrorDisplay(auth.error!),
                               ),
                             CustomButton(
                               label: 'Register',

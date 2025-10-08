@@ -28,6 +28,9 @@ Future<void> main() async {
 
   // Load environment variables before Supabase initialization
   await dotenv.load(fileName: '.env');
+  if (kDebugMode) {
+    debugPrint('Loaded SUPABASE_URL=${dotenv.env['SUPABASE_URL']}');
+  }
 
   if (kDebugMode) {
     final envUrl = dotenv.env['SUPABASE_URL'] ?? '(missing)';
