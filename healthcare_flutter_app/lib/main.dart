@@ -14,6 +14,7 @@ Future<void> main() async {
     // Validate config in debug to catch common mistakes.
     SupabaseConfig.debugValidate();
 
+    // Initialize Supabase using values from SupabaseConfig. Do not add type args here.
     await Supabase.initialize(
       url: SupabaseConfig.url,
       anonKey: SupabaseConfig.anonKey,
@@ -46,10 +47,14 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (showPlaceholder) {
-      return const MaterialApp(
+      return MaterialApp(
         debugShowCheckedModeBanner: false,
         home: Scaffold(
-          body: Center(
+          appBar: AppBar(
+            title: const Text('healthcare_flutter_app'),
+            centerTitle: true,
+          ),
+          body: const Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -136,7 +141,8 @@ class TodosPage extends StatefulWidget {
 }
 
 class _TodosPageState extends State<TodosPage> {
-  late final Future<List<Map<String, dynamic>>> _future;
+  // Keep Future as List<dynamic> because select() should not receive type args in this SDK version.
+  late final Future<List<dynamic>> _future;
 
   @override
   void initState() {
@@ -144,20 +150,21 @@ class _TodosPageState extends State<TodosPage> {
     _future = _fetchTodos();
   }
 
-  Future<List<Map<String, dynamic>>> _fetchTodos() async {
+  Future<List<dynamic>> _fetchTodos() async {
     final client = Supabase.instance.client;
     final rows = await client
         .from('todos')
-        .select<List<Map<String, dynamic>>>()
+        .select()
         .order('id', ascending: true);
-    return rows;
+    // The todos query returns a JSON array; cast to List<dynamic>.
+    return (rows as List).cast<dynamic>();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Todos')),
-      body: FutureBuilder<List<Map<String, dynamic>>>>(
+      body: FutureBuilder<List<dynamic>>(
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -175,10 +182,20 @@ class _TodosPageState extends State<TodosPage> {
               ),
             );
           }
-          final todos = snapshot.data ?? <Map<String, dynamic>>[];
+
+          final data = snapshot.data;
+          if (data == null) {
+            return const Center(child: Text('No data found'));
+          }
+
+          // Safely treat items as Map<String, dynamic> at read time.
+          final List<Map<String, dynamic>> todos =
+              data.whereType<Map<String, dynamic>>().toList();
+
           if (todos.isEmpty) {
             return const Center(child: Text('No todos found'));
           }
+
           return ListView.separated(
             itemCount: todos.length,
             separatorBuilder: (_, __) => const Divider(height: 1),
@@ -186,7 +203,8 @@ class _TodosPageState extends State<TodosPage> {
               final todo = todos[index];
               final name =
                   (todo['name'] ?? todo['title'] ?? '').toString().trim();
-              final isDone = (todo['is_complete'] ?? todo['completed'] ?? false) == true;
+              final isDone =
+                  (todo['is_complete'] ?? todo['completed'] ?? false) == true;
               return ListTile(
                 title: Text(name.isEmpty ? '(untitled)' : name),
                 leading: Icon(
