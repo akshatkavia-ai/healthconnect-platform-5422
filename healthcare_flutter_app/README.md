@@ -2,120 +2,48 @@
 
 Minimal Supabase + Flutter example that initializes Supabase once at startup and renders a simple list from the `todos` table.
 
-This app now supports configuration from both dotenv files and `--dart-define` values, with a clear fallback and in‑app guidance if configuration is missing.
-
 ## Quick Start
 
-Choose ONE of the methods below to provide Supabase credentials.
+1) Create a `todos` table in your Supabase project with a text column `name` (and optional `is_complete` boolean), and ensure your RLS policies allow `select` for the `anon` role if testing unauthenticated.
 
-### Method A (Recommended): --dart-define
-
-Pass credentials at runtime using `--dart-define`. This works for web and mobile.
+2) Run the Flutter app with your Supabase credentials using --dart-define:
 
 - Web:
 ```
 flutter run -d chrome \
   --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co \
-  --dart-define=SUPABASE_KEY=YOUR_ANON_OR_SERVICE_ROLE_KEY
+  --dart-define=SUPABASE_ANON_KEY=YOUR_ANON_KEY
 ```
 
 - Mobile (Android/iOS):
 ```
 flutter run \
   --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co \
-  --dart-define=SUPABASE_KEY=YOUR_ANON_OR_SERVICE_ROLE_KEY
+  --dart-define=SUPABASE_ANON_KEY=YOUR_ANON_KEY
 ```
 
-Notes:
-- You can also use `--dart-define=SUPABASE_ANON_KEY=YOUR_ANON_KEY` if you prefer that variable name.
-- On CI/CD, set these values in your pipeline variables for each build profile.
+The app will initialize Supabase exactly once before `runApp`, then query `todos` and display each row by its `name`.
 
-### Method B (Optional): dotenv files (.env or .env.local)
+## Configuration
 
-Create a `.env` or `.env.local` file with:
+Configuration is centralized in:
+- lib/supabase_config.dart
 
-```
-SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-SUPABASE_KEY=YOUR_ANON_OR_SERVICE_ROLE_KEY
-# Alternatively, use:
-# SUPABASE_ANON_KEY=YOUR_ANON_KEY
-```
+By default, the app prefers values from `--dart-define` (recommended). It also includes dev/demo fallbacks:
+- SUPABASE_URL default: `https://dzrdewhocvijofmcmxeu.supabase.co`
+- SUPABASE_ANON_KEY default: sample publishable key
 
-Mobile/Desktop:
-- This works out of the box for mobile/desktop as long as the file is available at runtime in the asset bundle.
-- If you plan to ship dotenv files with the app, add them to your `pubspec.yaml` under `flutter: assets:`.
-  Example:
-  ```
-  flutter:
-    uses-material-design: true
-    assets:
-      - .env
-      - .env.local
-  ```
+For production, DO NOT hardcode secrets. Use runtime configuration via:
+- `--dart-define` (recommended)
+- or your CI/CD secure variables
 
-Web:
-- Prefer `--dart-define` for web.
-- If you still want to use dotenv on web, ensure the files are bundled and accessible at runtime (add them to assets and handle cache/CDN as needed).
-
-### Fallback Order at Startup
-
-The app resolves configuration in this order:
-1) dotenv (`.env`), then optionally `.env.local` (if keys are still missing)
-2) `--dart-define` via `String.fromEnvironment('SUPABASE_URL')` and `String.fromEnvironment('SUPABASE_KEY')`
-   - Also accepts `String.fromEnvironment('SUPABASE_ANON_KEY')` as a fallback for the key
-3) If still missing, the app shows an in‑app configuration screen with clear guidance and example commands
-
-## Behavior and Error Handling
-
-- If the dotenv file is missing or fails to load, the app continues without crashing and tries `--dart-define`.
-- Supabase initialization only runs when both URL and key are resolved, avoiding DNS/connection attempts when misconfigured.
-- In debug mode, helpful logs are output to the console.
-
-## App Flow
-
-- Supabase is initialized exactly once before `runApp`, using `SupabaseConfig.initialize(url, anonKey)` from:
-  - `lib/config/supabase_config.dart` (remains the single source for runtime client access)
-- After initialization, the app queries your Supabase backend (e.g., `todos`) and renders data.
-- A Health Check page is available for diagnostics.
-
-## Health Check
-
-Open the Health Check page from the login overflow menu or navigate to `/health`. It shows:
-- Effective Supabase host
-- Initialization status and messages
-- A simple connectivity check
+For convenience, a `.env.example` is provided to document the required variables. This app does not read `.env` directly; it expects values via `--dart-define`.
 
 ## Notes
 
-- Ensure a `todos` table exists and has a `name` (or `title`) text column, and optionally an `is_complete` or `is_done` boolean column.
-- If you see permission errors, verify RLS policies or sign in with a user that has appropriate permissions.
-- No secrets are hardcoded. Use dotenv files in development or `--dart-define` for all environments.
-
-## Where Configuration Lives
-
-- Runtime initialization and client access:
-  - `lib/config/supabase_config.dart`
-
-## Example Commands
-
-- Web:
-```
-flutter run -d chrome \
-  --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co \
-  --dart-define=SUPABASE_KEY=YOUR_ANON_OR_SERVICE_ROLE_KEY
-```
-
-- Mobile:
-```
-flutter run \
-  --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co \
-  --dart-define=SUPABASE_KEY=YOUR_ANON_OR_SERVICE_ROLE_KEY
-```
-
-- Dotenv file example:
-```
-SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-SUPABASE_KEY=YOUR_ANON_OR_SERVICE_ROLE_KEY
-```
-
-For production, always use runtime configuration or secure CI/CD variables; do not hardcode secrets in source.
+- Ensure a `todos` table exists and has a `name` text column. Optional `is_complete` boolean is recognized for a checkmark icon.
+- If you see permission errors, verify RLS policies or sign in to test with an authenticated session.
+- The entrypoint at `lib/main.dart` handles:
+  - WidgetsFlutterBinding.ensureInitialized()
+  - Supabase.initialize(...) once before runApp
+  - Clear loading and error states in the UI
