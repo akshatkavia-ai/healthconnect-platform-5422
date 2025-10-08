@@ -1,0 +1,1 @@
+ /home/kavia/workspace/code-generation/healthconnect-platform-5422/healthcare_flutter_app/.dart_tool/flutter_build/2a0bbac13b89717f2f67ad21bf2f1485/native_assets.json: 

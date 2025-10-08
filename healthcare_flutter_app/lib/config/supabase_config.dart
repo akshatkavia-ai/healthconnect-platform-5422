@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// PUBLIC_INTERFACE
 class SupabaseConfig {
   static String? _effectiveUrl;
+  static String _lastConnectionMessage = '';
   
   /// Maximum retries for initialization
   static const int _maxInitRetries = 3;
@@ -88,6 +89,7 @@ class SupabaseConfig {
       final msg =
           'Supabase environment variables are missing. Ensure SUPABASE_URL and SUPABASE_KEY are set in .env '
           '(SUPABASE_ANON_KEY is supported as a fallback).';
+      _lastConnectionMessage = '[Supabase] Initialization failed: Missing environment variables';
       if (kDebugMode) {
         debugPrint(msg);
       }
@@ -103,6 +105,7 @@ class SupabaseConfig {
       final msg =
           'Invalid SUPABASE_URL detected in .env: "$rawUrl". Issues: ${errors.join('; ')}.\n'
           'Example of a valid URL: https://dzrdewhocvijofmcmxeu.supabase.co';
+      _lastConnectionMessage = '[Supabase] Initialization failed: Invalid URL format (${errors.join(', ')})';
       if (kDebugMode) {
         debugPrint(msg);
       }
@@ -130,8 +133,19 @@ class SupabaseConfig {
         );
 
         _effectiveUrl = rawUrl;
+        
+        // Extract host from URL for connection message
+        String host = rawUrl;
+        try {
+          final uri = Uri.parse(rawUrl);
+          host = uri.host.isNotEmpty ? uri.host : rawUrl;
+        } catch (_) {
+          // Keep rawUrl if parsing fails
+        }
+        
+        _lastConnectionMessage = '[Supabase] Connected to $host';
         if (kDebugMode) {
-          debugPrint('Supabase initialized successfully on attempt $attempt');
+          debugPrint(_lastConnectionMessage);
         }
         return; // Success
       } catch (e) {
@@ -149,6 +163,7 @@ class SupabaseConfig {
 
     // If we get here, all retries failed
     final msg = 'Failed to initialize Supabase after $_maxInitRetries attempts. Last error: $lastError';
+    _lastConnectionMessage = '[Supabase] Initialization failed: $lastError';
     debugPrint(msg);
     throw StateError(msg);
   }
@@ -160,4 +175,10 @@ class SupabaseConfig {
   /// PUBLIC_INTERFACE
   /// Returns the effective Supabase URL used after initialization, or empty string if not initialized yet.
   static String get effectiveSupabaseUrl => _effectiveUrl ?? '';
+
+  /// PUBLIC_INTERFACE
+  /// Returns the last connection message, indicating success or failure status.
+  /// On success: '[Supabase] Connected to {host}'
+  /// On failure: '[Supabase] Initialization failed: {reason}'
+  static String get lastConnectionMessage => _lastConnectionMessage;
 }
