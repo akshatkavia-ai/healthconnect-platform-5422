@@ -1,47 +1,49 @@
 # healthcare_flutter_app
 
-Flutter app for HealthConnect.
+Minimal Supabase + Flutter example that initializes Supabase once at startup and renders a simple list from the `todos` table.
 
-## Supabase Configuration (Hardcoded)
+## Quick Start
 
-This app now uses hardcoded Supabase credentials for initialization. No `.env` file is required.
+1) Create a `todos` table in your Supabase project with a text column `name` (and optional `is_complete` boolean), and ensure your RLS policies allow `select` for the `anon` role if testing unauthenticated.
 
-Edit the file below to configure your project:
+2) Run the Flutter app with your Supabase credentials using --dart-define:
 
-- lib/config/supabase_config.dart
-
-Set these two constants to match your Supabase project:
-
-```dart
-// lib/config/supabase_config.dart
-static const String supabaseUrl = 'https://YOUR-PROJECT-REF.supabase.co';
-static const String supabaseKey = 'YOUR-PUBLIC-ANON-KEY';
+- Web:
+```
+flutter run -d chrome \
+  --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co \
+  --dart-define=SUPABASE_ANON_KEY=YOUR_ANON_KEY
 ```
 
-Notes:
-- The app initializes Supabase during startup using the values above.
-- Initialization is idempotent and includes retry logic and a lightweight connectivity check.
-- A connection status message is logged and also available via `SupabaseConfig.lastConnectionMessage`.
+- Mobile (Android/iOS):
+```
+flutter run \
+  --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co \
+  --dart-define=SUPABASE_ANON_KEY=YOUR_ANON_KEY
+```
 
-Security note:
-- Hardcoding keys is suitable for development or demo. For production, consider safer configuration and rotate keys regularly.
+The app will initialize Supabase exactly once before `runApp`, then query `todos` and display each row by its `name`.
 
-Auth redirect notes:
-- Email confirmation redirect now relies on the Supabase project's Auth settings. You can customize this by passing `emailRedirectTo` in `AuthService.signUp` if needed.
+## Configuration
 
-## Health Check
+Configuration is centralized in:
+- lib/supabase_config.dart
 
-From the Login screen, open the overflow menu and tap “Health check”. This page shows:
-- Supabase URL host (from the runtime-initialized client)
-- A non-destructive connectivity check (attempts to read from `profiles` with `limit(1)`)
-- Status OK/Fail with guidance
+By default, the app prefers values from `--dart-define` (recommended). It also includes dev/demo fallbacks:
+- SUPABASE_URL default: `https://dzrdewhocvijofmcmxeu.supabase.co`
+- SUPABASE_ANON_KEY default: sample publishable key
 
-If you see “permission denied”, ensure your anon role has appropriate RLS permissions or sign in to test with an authenticated session.
+For production, DO NOT hardcode secrets. Use runtime configuration via:
+- `--dart-define` (recommended)
+- or your CI/CD secure variables
 
-## Run
+For convenience, a `.env.example` is provided to document the required variables. This app does not read `.env` directly; it expects values via `--dart-define`.
 
-- flutter pub get
-- flutter run
+## Notes
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials, samples, guidance on mobile development, and a full API reference.
+- Ensure a `todos` table exists and has a `name` text column. Optional `is_complete` boolean is recognized for a checkmark icon.
+- If you see permission errors, verify RLS policies or sign in to test with an authenticated session.
+- The entrypoint at `lib/main.dart` handles:
+  - WidgetsFlutterBinding.ensureInitialized()
+  - Supabase.initialize(...) once before runApp
+  - Clear loading and error states in the UI

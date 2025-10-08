@@ -1,137 +1,87 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'config/supabase_config.dart';
-import 'config/theme_config.dart';
-import 'providers/auth_provider.dart';
-import 'providers/patient_provider.dart';
-import 'providers/appointment_provider.dart';
-import 'providers/medical_record_provider.dart';
+import 'supabase_config.dart';
 
-import 'screens/auth/login_screen.dart';
-import 'screens/auth/register_screen.dart';
-import 'screens/patient/patient_dashboard_screen.dart';
-import 'screens/patient/patient_registration_screen.dart';
-import 'screens/doctor/doctor_dashboard_screen.dart';
-import 'screens/appointments/appointments_list_screen.dart';
-import 'screens/appointments/appointment_booking_screen.dart';
-import 'screens/appointments/appointment_detail_screen.dart';
-import 'screens/medical_records/medical_records_list_screen.dart';
-import 'screens/medical_records/medical_record_detail_screen.dart';
-import 'widgets/health_check.dart';
-
+/// PUBLIC_INTERFACE
+/// Main entrypoint. Initializes Supabase exactly once before running the app.
+/// Shows a minimal Todos list that reads from the 'todos' table (expects a text column 'name').
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Supabase with hardcoded constants
+  String? initError;
   try {
-    await SupabaseConfig.initialize();
-    if (kDebugMode) {
-      debugPrint('Effective SUPABASE_URL at startup: ${SupabaseConfig.effectiveSupabaseUrl}');
-    }
+    // Validate config in debug to catch common mistakes.
+    SupabaseConfig.debugValidate();
+
+    await Supabase.initialize(
+      url: SupabaseConfig.url,
+      anonKey: SupabaseConfig.anonKey,
+    );
   } catch (e) {
-    // If initialization fails, run the app with error message
-    runApp(MyApp(envError: 'Supabase initialization failed: $e'));
-    return; // Stop further execution
+    initError = 'Supabase initialization failed: $e';
   }
 
-  // Run app normally if initialization succeeds
-  runApp(const MyApp());
+  // Use placeholder=false to render the real app. If initialization failed,
+  // an error page is shown inside MyApp.
+  runApp(MyApp(
+    showPlaceholder: false,
+    initError: initError,
+  ));
 }
 
+/// PUBLIC_INTERFACE
+/// Root widget. Defaults to a simple placeholder to allow quick widget tests
+/// to instantiate `const MyApp()` without running the async initialization.
 class MyApp extends StatelessWidget {
-  final String? envError;
-  const MyApp({super.key, this.envError});
+  final bool showPlaceholder;
+  final String? initError;
 
-  GoRouter _buildRouter(AuthProvider auth) {
-    return GoRouter(
-      initialLocation: '/login',
-      refreshListenable: auth,
-      redirect: (context, state) {
-        final loggedIn = auth.isAuthenticated;
-        final loggingIn = state.matchedLocation == '/login' || state.matchedLocation == '/register';
-
-        if (!loggedIn && !loggingIn) return '/login';
-        if (loggedIn && loggingIn) {
-          return auth.role == 'doctor' ? '/doctor' : '/patient';
-        }
-        return null;
-      },
-      routes: [
-        GoRoute(path: '/login', name: 'login', builder: (context, state) => const LoginScreen()),
-        GoRoute(path: '/register', name: 'register', builder: (context, state) => const RegisterScreen()),
-        GoRoute(path: '/patient', name: 'patient_dashboard', builder: (context, state) => const PatientDashboardScreen()),
-        GoRoute(path: '/patient/register', name: 'patient_registration', builder: (context, state) => const PatientRegistrationScreen()),
-        GoRoute(path: '/doctor', name: 'doctor_dashboard', builder: (context, state) => const DoctorDashboardScreen()),
-        GoRoute(
-          path: '/appointments',
-          name: 'appointments_list',
-          builder: (context, state) => const AppointmentsListScreen(),
-          routes: [
-            GoRoute(path: 'book', name: 'appointment_booking', builder: (context, state) => const AppointmentBookingScreen()),
-            GoRoute(
-              path: ':id',
-              name: 'appointment_detail',
-              builder: (context, state) => AppointmentDetailScreen(id: state.pathParameters['id']!),
-            ),
-          ],
-        ),
-        GoRoute(
-          path: '/records',
-          name: 'records_list',
-          builder: (context, state) => const MedicalRecordsListScreen(),
-          routes: [
-            GoRoute(
-              path: ':id',
-              name: 'record_detail',
-              builder: (context, state) => MedicalRecordDetailScreen(id: state.pathParameters['id']!),
-            ),
-          ],
-        ),
-        GoRoute(path: '/health', name: 'health_check', builder: (context, state) => const HealthCheck()),
-      ],
-    );
-  }
+  const MyApp({
+    super.key,
+    this.showPlaceholder = true,
+    this.initError,
+  });
 
   @override
   Widget build(BuildContext context) {
-    // Show friendly error if initialization misconfigured
-    if (envError != null) {
-      return MaterialApp(
-        title: 'HealthConnect - Configuration Error',
+    if (showPlaceholder) {
+      return const MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: ThemeConfig.theme,
-        home: _EnvErrorScreen(message: envError!),
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 12),
+                Text('healthcare_flutter_app App is being generated...'),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider<AuthProvider>(create: (_) => AuthProvider()),
-        ChangeNotifierProvider<PatientProvider>(create: (_) => PatientProvider()),
-        ChangeNotifierProvider<AppointmentProvider>(create: (_) => AppointmentProvider()),
-        ChangeNotifierProvider<MedicalRecordProvider>(create: (_) => MedicalRecordProvider()),
-      ],
-      child: Builder(builder: (context) {
-        final auth = context.watch<AuthProvider>();
-        final router = _buildRouter(auth);
+    if (initError != null) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'Supabase Init Error',
+        home: _InitErrorScreen(message: initError!),
+      );
+    }
 
-        return MaterialApp.router(
-          title: 'HealthConnect',
-          debugShowCheckedModeBanner: false,
-          theme: ThemeConfig.theme,
-          routerConfig: router,
-        );
-      }),
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Todos',
+      home: TodosPage(),
     );
   }
 }
 
-class _EnvErrorScreen extends StatelessWidget {
+class _InitErrorScreen extends StatelessWidget {
   final String message;
-  const _EnvErrorScreen({required this.message});
+  const _InitErrorScreen({required this.message});
 
   @override
   Widget build(BuildContext context) {
@@ -143,22 +93,110 @@ class _EnvErrorScreen extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: ListView(
-              children: const [
-                Text('Supabase Configuration', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                SizedBox(height: 8),
-                Text('There was a problem initializing Supabase.'),
-                SizedBox(height: 12),
-                Text('To fix:', style: TextStyle(fontWeight: FontWeight.w600)),
-                SizedBox(height: 8),
+              children: [
+                const Text(
+                  'Supabase Initialization Error',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
                 Text(
-                  '- Open lib/config/supabase_config.dart\n'
-                  '- Set supabaseUrl and supabaseKey constants to match your project\n'
-                  '- Rebuild and run the app\n',
+                  message,
+                  style: const TextStyle(color: Colors.redAccent),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'How to fix',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '- Provide your project credentials via --dart-define:\n'
+                  '  flutter run \\\n'
+                  '    --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co \\\n'
+                  '    --dart-define=SUPABASE_ANON_KEY=YOUR_ANON_KEY\n\n'
+                  '- Or update the fallbacks in lib/supabase_config.dart (development only).',
                 ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// PUBLIC_INTERFACE
+/// Minimal Todos page that reads from the 'todos' table and displays each row's 'name' field.
+/// Add a text column 'name' in your Supabase project's `todos` table and ensure RLS allows anon read if testing unauthenticated.
+class TodosPage extends StatefulWidget {
+  const TodosPage({super.key});
+
+  @override
+  State<TodosPage> createState() => _TodosPageState();
+}
+
+class _TodosPageState extends State<TodosPage> {
+  late final Future<List<Map<String, dynamic>>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _fetchTodos();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchTodos() async {
+    final client = Supabase.instance.client;
+    final rows = await client
+        .from('todos')
+        .select<List<Map<String, dynamic>>>()
+        .order('id', ascending: true);
+    return rows;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Todos')),
+      body: FutureBuilder<List<Map<String, dynamic>>>>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  'Error loading todos: ${snapshot.error}',
+                  style: const TextStyle(color: Colors.red),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          }
+          final todos = snapshot.data ?? <Map<String, dynamic>>[];
+          if (todos.isEmpty) {
+            return const Center(child: Text('No todos found'));
+          }
+          return ListView.separated(
+            itemCount: todos.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final todo = todos[index];
+              final name =
+                  (todo['name'] ?? todo['title'] ?? '').toString().trim();
+              final isDone = (todo['is_complete'] ?? todo['completed'] ?? false) == true;
+              return ListTile(
+                title: Text(name.isEmpty ? '(untitled)' : name),
+                leading: Icon(
+                  isDone ? Icons.check_circle : Icons.radio_button_unchecked,
+                  color: isDone ? Colors.green : Colors.grey,
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }
