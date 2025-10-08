@@ -24,8 +24,9 @@ class PatientDashboardScreen extends StatelessWidget {
     }
 
     if (!patientProvider.loading && patientProvider.current == null) {
-      // Trigger load (no context operations after await here)
-      Future.microtask(() => context.read<PatientProvider>().loadByUserId(user.id));
+      // Trigger load without using BuildContext after an async gap
+      final pid = user.id;
+      Future.microtask(() => patientProvider.loadByUserId(pid));
     }
 
     return Scaffold(

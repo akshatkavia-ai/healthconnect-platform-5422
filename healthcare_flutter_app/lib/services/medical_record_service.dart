@@ -8,8 +8,8 @@ class MedicalRecordService {
   /// PUBLIC_INTERFACE
   Future<List<MedicalRecord>> listForPatient(String patientId) async {
     final rows = await SupabaseService.table(tableName)
-        .eq('patient_id', patientId)
         .select()
+        .eq('patient_id', patientId)
         .order('created_at', ascending: false);
     return (rows as List<dynamic>)
         .map((e) => MedicalRecord.fromMap(e as Map<String, dynamic>))
@@ -19,10 +19,10 @@ class MedicalRecordService {
   /// PUBLIC_INTERFACE
   Future<MedicalRecord?> getById(String id) async {
     final row = await SupabaseService.table(tableName)
-        .eq('id', id)
         .select()
+        .eq('id', id)
         .maybeSingle();
-    return row == null ? null : MedicalRecord.fromMap(row as Map<String, dynamic>);
+    return row == null ? null : MedicalRecord.fromMap(row);
   }
 
   /// PUBLIC_INTERFACE
@@ -31,7 +31,7 @@ class MedicalRecordService {
         .insert(r.toMap())
         .select()
         .single();
-    return MedicalRecord.fromMap(data as Map<String, dynamic>);
+    return MedicalRecord.fromMap(data);
   }
 
   /// PUBLIC_INTERFACE

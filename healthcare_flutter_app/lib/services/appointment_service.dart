@@ -7,33 +7,29 @@ class AppointmentService {
 
   /// PUBLIC_INTERFACE
   Future<List<Appointment>> listForPatient(String patientId) async {
-    final rows = await SupabaseService.table(tableName)
-        .eq('patient_id', patientId)
+    final List<Map<String, dynamic>> rows = await SupabaseService.table(tableName)
         .select()
+        .eq('patient_id', patientId)
         .order('start_time');
-    return (rows as List<dynamic>)
-        .map((e) => Appointment.fromMap(e as Map<String, dynamic>))
-        .toList();
+    return rows.map(Appointment.fromMap).toList();
   }
 
   /// PUBLIC_INTERFACE
   Future<List<Appointment>> listForDoctor(String doctorId) async {
-    final rows = await SupabaseService.table(tableName)
-        .eq('doctor_id', doctorId)
+    final List<Map<String, dynamic>> rows = await SupabaseService.table(tableName)
         .select()
+        .eq('doctor_id', doctorId)
         .order('start_time');
-    return (rows as List<dynamic>)
-        .map((e) => Appointment.fromMap(e as Map<String, dynamic>))
-        .toList();
+    return rows.map(Appointment.fromMap).toList();
   }
 
   /// PUBLIC_INTERFACE
   Future<Appointment?> getById(String id) async {
     final row = await SupabaseService.table(tableName)
-        .eq('id', id)
         .select()
+        .eq('id', id)
         .maybeSingle();
-    return row == null ? null : Appointment.fromMap(row as Map<String, dynamic>);
+    return row == null ? null : Appointment.fromMap(row);
   }
 
   /// PUBLIC_INTERFACE
@@ -42,7 +38,7 @@ class AppointmentService {
         .insert(a.toMap())
         .select()
         .single();
-    return Appointment.fromMap(data as Map<String, dynamic>);
+    return Appointment.fromMap(data);
   }
 
   /// PUBLIC_INTERFACE

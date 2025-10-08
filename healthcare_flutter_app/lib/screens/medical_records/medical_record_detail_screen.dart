@@ -14,7 +14,8 @@ class MedicalRecordDetailScreen extends StatelessWidget {
     final provider = context.watch<MedicalRecordProvider>();
 
     if (!provider.loading && (provider.selected == null || provider.selected!.id != id)) {
-      Future.microtask(() => context.read<MedicalRecordProvider>().getById(id));
+      // Avoid BuildContext across async gaps by using the provider reference directly
+      Future.microtask(() => provider.getById(id));
     }
 
     return Scaffold(

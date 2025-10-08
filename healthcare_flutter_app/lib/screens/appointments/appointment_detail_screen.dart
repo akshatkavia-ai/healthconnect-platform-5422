@@ -15,7 +15,8 @@ class AppointmentDetailScreen extends StatelessWidget {
     final provider = context.watch<AppointmentProvider>();
 
     if (!provider.loading && (provider.selected == null || provider.selected!.id != id)) {
-      Future.microtask(() => context.read<AppointmentProvider>().getById(id));
+      // Avoid using BuildContext across async gaps by accessing the provider instance directly.
+      Future.microtask(() => provider.getById(id));
     }
 
     return Scaffold(

@@ -19,7 +19,7 @@ class ThemeConfig {
       primary: primary,
       secondary: secondary,
       surface: surface,
-      background: background, // Not used in ColorScheme v3, retained for clarity
+      // background removed (deprecated in Flutter 3.18+); use surface/scaffoldBackgroundColor instead
       error: error,
       brightness: Brightness.light,
     );

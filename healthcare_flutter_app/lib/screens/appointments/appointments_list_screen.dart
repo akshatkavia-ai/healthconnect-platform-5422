@@ -27,10 +27,11 @@ class AppointmentsListScreen extends StatelessWidget {
     // Trigger initial load
     if (!apptProvider.loading && apptProvider.items.isEmpty) {
       if (auth.role == 'doctor') {
-        Future.microtask(() => context.read<AppointmentProvider>().loadForDoctor(user.id));
+        final did = user.id;
+        Future.microtask(() => apptProvider.loadForDoctor(did));
       } else {
         final pid = patientProvider.current?.id ?? user.id;
-        Future.microtask(() => context.read<AppointmentProvider>().loadForPatient(pid));
+        Future.microtask(() => apptProvider.loadForPatient(pid));
       }
     }
 

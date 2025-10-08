@@ -26,7 +26,7 @@ class MedicalRecordsListScreen extends StatelessWidget {
 
     if (!recProvider.loading && recProvider.items.isEmpty) {
       final pid = patientProvider.current?.id ?? user.id;
-      Future.microtask(() => context.read<MedicalRecordProvider>().loadForPatient(pid));
+      Future.microtask(() => recProvider.loadForPatient(pid));
     }
 
     return Scaffold(
