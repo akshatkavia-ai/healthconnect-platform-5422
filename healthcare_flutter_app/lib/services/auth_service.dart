@@ -1,3 +1,4 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/user_model.dart';
@@ -15,17 +16,19 @@ class AuthService {
 
   /// PUBLIC_INTERFACE
   /// Sign up with email and password. Role defaults to 'patient'.
+  /// Uses SITE_URL from .env (if present) for the email confirmation redirect.
   Future<AuthResponse> signUp({
     required String email,
     required String password,
     String role = 'patient',
   }) async {
     // Store role in user metadata for simplicity. For production, store in 'profiles' table.
+    final redirect = dotenv.env['SITE_URL']?.trim();
     return _client.auth.signUp(
       email: email,
       password: password,
       data: {'role': role},
-      emailRedirectTo: null,
+      emailRedirectTo: (redirect != null && redirect.isNotEmpty) ? redirect : null,
     );
   }
 

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -25,25 +26,28 @@ import 'widgets/health_check.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables before any Supabase initialization.
+  // Load environment variables before Supabase initialization
   await dotenv.load(fileName: '.env');
 
-  String? envError;
-  final supabaseUrl = dotenv.env['SUPABASE_URL'];
-  final supabaseKey = dotenv.env['SUPABASE_KEY'] ?? dotenv.env['SUPABASE_ANON_KEY'];
-
-  if (supabaseUrl == null || supabaseUrl.isEmpty || supabaseKey == null || supabaseKey.isEmpty) {
-    envError = 'Missing SUPABASE_URL and/or SUPABASE_KEY in .env '
-        '(SUPABASE_ANON_KEY is also supported as a fallback).';
-  } else {
-    try {
-      await SupabaseConfig.initialize();
-    } catch (e) {
-      envError = 'Supabase initialization failed: $e';
-    }
+  if (kDebugMode) {
+    final envUrl = dotenv.env['SUPABASE_URL'] ?? '(missing)';
+    debugPrint('Loaded .env SUPABASE_URL=$envUrl');
   }
 
-  runApp(MyApp(envError: envError));
+  // Initialize Supabase safely after .env is loaded
+  try {
+    await SupabaseConfig.initialize();
+    if (kDebugMode) {
+      debugPrint('Effective SUPABASE_URL at startup: ${SupabaseConfig.effectiveSupabaseUrl}');
+    }
+  } catch (e) {
+    // If initialization fails, run the app with envError
+    runApp(MyApp(envError: 'Supabase initialization failed: $e'));
+    return; // Stop further execution
+  }
+
+  // Run app normally if initialization succeeds
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -56,85 +60,53 @@ class MyApp extends StatelessWidget {
       refreshListenable: auth,
       redirect: (context, state) {
         final loggedIn = auth.isAuthenticated;
-        final loggingIn =
-            state.matchedLocation == '/login' || state.matchedLocation == '/register';
+        final loggingIn = state.matchedLocation == '/login' || state.matchedLocation == '/register';
 
         if (!loggedIn && !loggingIn) return '/login';
         if (loggedIn && loggingIn) {
-          // Role-based home
           return auth.role == 'doctor' ? '/doctor' : '/patient';
         }
         return null;
       },
       routes: [
-        GoRoute(
-          path: '/login',
-          name: 'login',
-          builder: (_, __) => const LoginScreen(),
-        ),
-        GoRoute(
-          path: '/register',
-          name: 'register',
-          builder: (_, __) => const RegisterScreen(),
-        ),
-        GoRoute(
-          path: '/patient',
-          name: 'patient_dashboard',
-          builder: (_, __) => const PatientDashboardScreen(),
-        ),
-        GoRoute(
-          path: '/patient/register',
-          name: 'patient_registration',
-          builder: (_, __) => const PatientRegistrationScreen(),
-        ),
-        GoRoute(
-          path: '/doctor',
-          name: 'doctor_dashboard',
-          builder: (_, __) => const DoctorDashboardScreen(),
-        ),
+        GoRoute(path: '/login', name: 'login', builder: (context, state) => const LoginScreen()),
+        GoRoute(path: '/register', name: 'register', builder: (context, state) => const RegisterScreen()),
+        GoRoute(path: '/patient', name: 'patient_dashboard', builder: (context, state) => const PatientDashboardScreen()),
+        GoRoute(path: '/patient/register', name: 'patient_registration', builder: (context, state) => const PatientRegistrationScreen()),
+        GoRoute(path: '/doctor', name: 'doctor_dashboard', builder: (context, state) => const DoctorDashboardScreen()),
         GoRoute(
           path: '/appointments',
           name: 'appointments_list',
-          builder: (_, __) => const AppointmentsListScreen(),
+          builder: (context, state) => const AppointmentsListScreen(),
           routes: [
-            GoRoute(
-              path: 'book',
-              name: 'appointment_booking',
-              builder: (_, __) => const AppointmentBookingScreen(),
-            ),
+            GoRoute(path: 'book', name: 'appointment_booking', builder: (context, state) => const AppointmentBookingScreen()),
             GoRoute(
               path: ':id',
               name: 'appointment_detail',
-              builder: (_, state) =>
-                  AppointmentDetailScreen(id: state.pathParameters['id']!),
+              builder: (context, state) => AppointmentDetailScreen(id: state.pathParameters['id']!),
             ),
           ],
         ),
         GoRoute(
           path: '/records',
           name: 'records_list',
-          builder: (_, __) => const MedicalRecordsListScreen(),
+          builder: (context, state) => const MedicalRecordsListScreen(),
           routes: [
             GoRoute(
               path: ':id',
               name: 'record_detail',
-              builder: (_, state) =>
-                  MedicalRecordDetailScreen(id: state.pathParameters['id']!),
+              builder: (context, state) => MedicalRecordDetailScreen(id: state.pathParameters['id']!),
             ),
           ],
         ),
-        GoRoute(
-          path: '/health',
-          name: 'health_check',
-          builder: (_, __) => const HealthCheck(),
-        ),
+        GoRoute(path: '/health', name: 'health_check', builder: (context, state) => const HealthCheck()),
       ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // If environment is misconfigured, present a friendly error UI and avoid runtime crashes.
+    // Show friendly error if environment misconfigured
     if (envError != null) {
       return MaterialApp(
         title: 'HealthConnect - Environment Error',
@@ -181,17 +153,11 @@ class _EnvErrorScreen extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: ListView(
               children: [
-                const Text(
-                  'Supabase Configuration Missing',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
+                const Text('Supabase Configuration Missing', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Text(message),
                 const SizedBox(height: 12),
-                const Text(
-                  'To fix:',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
+                const Text('To fix:', style: TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 const Text(
                   '- Create a .env file in the project root (same level as pubspec.yaml)\n'

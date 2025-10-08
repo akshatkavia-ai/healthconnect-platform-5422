@@ -5,6 +5,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/theme_config.dart';
+import '../config/supabase_config.dart';
 
 /// PUBLIC_INTERFACE
 class HealthCheck extends StatefulWidget {
@@ -20,7 +21,9 @@ class _HealthCheckState extends State<HealthCheck> {
   String _details = '';
 
   String get _host {
-    final url = dotenv.env['SUPABASE_URL'] ?? '';
+    // Prefer the effective URL from runtime initialization, fallback to .env if not initialized.
+    final effective = SupabaseConfig.effectiveSupabaseUrl;
+    final url = (effective.isNotEmpty ? effective : (dotenv.env['SUPABASE_URL'] ?? '')).trim();
     if (url.isEmpty) return '(not set)';
     try {
       final uri = Uri.parse(url);
