@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/user_model.dart';
@@ -10,7 +9,7 @@ import 'supabase_service.dart';
 /// PUBLIC_INTERFACE
 class AuthService {
   final SupabaseClient _client = SupabaseService.client;
-  
+
   static const int _maxSignupRetries = 3;
   static const int _baseDelayMs = 1000;
 
@@ -22,7 +21,7 @@ class AuthService {
 
   /// PUBLIC_INTERFACE
   /// Sign up with email and password. Role defaults to 'patient'.
-  /// Uses SITE_URL from .env (if present) for the email confirmation redirect.
+  /// The email redirect URL uses the Supabase project's Auth settings by default.
   /// Includes retry logic with exponential backoff.
   Future<AuthResponse> signUp({
     required String email,
@@ -30,8 +29,7 @@ class AuthService {
     String role = 'patient',
   }) async {
     AuthException? lastError;
-    final redirect = dotenv.env['SITE_URL']?.trim();
-    
+
     for (var attempt = 1; attempt <= _maxSignupRetries; attempt++) {
       try {
         if (kDebugMode && attempt > 1) {
@@ -42,16 +40,18 @@ class AuthService {
           email: email,
           password: password,
           data: {'role': role},
-          emailRedirectTo: (redirect != null && redirect.isNotEmpty) ? redirect : null,
+          // Set to null to fall back to Supabase project settings for confirmation redirect.
+          emailRedirectTo: null,
         );
       } on AuthException catch (e) {
         // Don't retry if it's a validation error or user already exists
         final errorMsg = e.message.toLowerCase();
-        if (errorMsg.contains('400') || errorMsg.contains('422') || 
+        if (errorMsg.contains('400') ||
+            errorMsg.contains('422') ||
             errorMsg.contains('already registered')) {
           rethrow;
         }
-        
+
         lastError = e;
         if (attempt < _maxSignupRetries) {
           final delayMs = (_baseDelayMs * pow(2, attempt - 1)).toInt();

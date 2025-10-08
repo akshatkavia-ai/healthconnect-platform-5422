@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/theme_config.dart';
@@ -21,10 +20,9 @@ class _HealthCheckState extends State<HealthCheck> {
   String _details = '';
 
   String get _host {
-    // Prefer the effective URL from runtime initialization, fallback to .env if not initialized.
-    final effective = SupabaseConfig.effectiveSupabaseUrl;
-    final url = (effective.isNotEmpty ? effective : (dotenv.env['SUPABASE_URL'] ?? '')).trim();
-    if (url.isEmpty) return '(not set)';
+    // Use the effective URL from runtime initialization.
+    final url = SupabaseConfig.effectiveSupabaseUrl.trim();
+    if (url.isEmpty) return '(not initialized)';
     try {
       final uri = Uri.parse(url);
       return uri.host.isEmpty ? url : uri.host;
@@ -74,7 +72,7 @@ class _HealthCheckState extends State<HealthCheck> {
           _details = 'Connectivity check failed.\n'
               'Primary: $e\n'
               'Auth fallback: $e2\n'
-              'Tip: Verify SUPABASE_URL/SUPABASE_KEY and network access.';
+              'Tip: Verify Supabase URL/key and network access.';
         });
       }
     } finally {
@@ -153,11 +151,13 @@ class _HealthCheckState extends State<HealthCheck> {
             ),
             const SizedBox(height: 8),
             const Text(
-              '- Ensure .env includes SUPABASE_URL and SUPABASE_KEY.\n'
-              '- If using SUPABASE_ANON_KEY, it is also supported as a fallback.\n'
-              '- Verify your RLS policies allow the operation used for the check, '
-              'or sign in to test with an authenticated session.',
+              '- Supabase credentials are hardcoded in lib/config/supabase_config.dart.\n'
+              '- Update supabaseUrl and supabaseKey there to match your project.\n'
+              '- Ensure your RLS policies allow the operation used for the check,\n'
+              '  or sign in to test with an authenticated session.',
             ),
+            const SizedBox(height: 12),
+            Text(SupabaseConfig.lastConnectionMessage),
           ],
         ),
       ),

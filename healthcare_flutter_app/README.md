@@ -2,26 +2,37 @@
 
 Flutter app for HealthConnect.
 
-## Environment setup
+## Supabase Configuration (Hardcoded)
 
-This app uses Supabase. Create a `.env` file at the project root (same level as `pubspec.yaml`) based on `.env.example`:
+This app now uses hardcoded Supabase credentials for initialization. No `.env` file is required.
 
-```
-SUPABASE_URL=https://dzrdewhocvijofmcmxeu.supabase.co
-SUPABASE_KEY=<your-anon-key>
-# Optional legacy alias (still supported)
-# SUPABASE_ANON_KEY=<your-anon-key>
+Edit the file below to configure your project:
+
+- lib/config/supabase_config.dart
+
+Set these two constants to match your Supabase project:
+
+```dart
+// lib/config/supabase_config.dart
+static const String supabaseUrl = 'https://YOUR-PROJECT-REF.supabase.co';
+static const String supabaseKey = 'YOUR-PUBLIC-ANON-KEY';
 ```
 
 Notes:
-- SUPABASE_KEY is the preferred variable for the anon/public key.
-- For backward compatibility, `SUPABASE_ANON_KEY` is also accepted if `SUPABASE_KEY` is not set.
-- The app loads `.env` at startup and shows a friendly UI if variables are missing.
+- The app initializes Supabase during startup using the values above.
+- Initialization is idempotent and includes retry logic and a lightweight connectivity check.
+- A connection status message is logged and also available via `SupabaseConfig.lastConnectionMessage`.
+
+Security note:
+- Hardcoding keys is suitable for development or demo. For production, consider safer configuration and rotate keys regularly.
+
+Auth redirect notes:
+- Email confirmation redirect now relies on the Supabase project's Auth settings. You can customize this by passing `emailRedirectTo` in `AuthService.signUp` if needed.
 
 ## Health Check
 
 From the Login screen, open the overflow menu and tap “Health check”. This page shows:
-- Supabase URL host
+- Supabase URL host (from the runtime-initialized client)
 - A non-destructive connectivity check (attempts to read from `profiles` with `limit(1)`)
 - Status OK/Fail with guidance
 

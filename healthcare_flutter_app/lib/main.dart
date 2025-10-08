@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'config/supabase_config.dart';
 import 'config/theme_config.dart';
@@ -26,25 +25,14 @@ import 'widgets/health_check.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables before Supabase initialization
-  await dotenv.load(fileName: '.env');
-  if (kDebugMode) {
-    debugPrint('Loaded SUPABASE_URL=${dotenv.env['SUPABASE_URL']}');
-  }
-
-  if (kDebugMode) {
-    final envUrl = dotenv.env['SUPABASE_URL'] ?? '(missing)';
-    debugPrint('Loaded .env SUPABASE_URL=$envUrl');
-  }
-
-  // Initialize Supabase safely after .env is loaded
+  // Initialize Supabase with hardcoded constants
   try {
     await SupabaseConfig.initialize();
     if (kDebugMode) {
       debugPrint('Effective SUPABASE_URL at startup: ${SupabaseConfig.effectiveSupabaseUrl}');
     }
   } catch (e) {
-    // If initialization fails, run the app with envError
+    // If initialization fails, run the app with error message
     runApp(MyApp(envError: 'Supabase initialization failed: $e'));
     return; // Stop further execution
   }
@@ -109,10 +97,10 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Show friendly error if environment misconfigured
+    // Show friendly error if initialization misconfigured
     if (envError != null) {
       return MaterialApp(
-        title: 'HealthConnect - Environment Error',
+        title: 'HealthConnect - Configuration Error',
         debugShowCheckedModeBanner: false,
         theme: ThemeConfig.theme,
         home: _EnvErrorScreen(message: envError!),
@@ -155,18 +143,17 @@ class _EnvErrorScreen extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: ListView(
-              children: [
-                const Text('Supabase Configuration Missing', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Text(message),
-                const SizedBox(height: 12),
-                const Text('To fix:', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
-                const Text(
-                  '- Create a .env file in the project root (same level as pubspec.yaml)\n'
-                  '- Add SUPABASE_URL and SUPABASE_KEY variables\n'
-                  '- Optionally, SUPABASE_ANON_KEY can be used as a legacy alias\n'
-                  '- See README or .env.example for details',
+              children: const [
+                Text('Supabase Configuration', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                SizedBox(height: 8),
+                Text('There was a problem initializing Supabase.'),
+                SizedBox(height: 12),
+                Text('To fix:', style: TextStyle(fontWeight: FontWeight.w600)),
+                SizedBox(height: 8),
+                Text(
+                  '- Open lib/config/supabase_config.dart\n'
+                  '- Set supabaseUrl and supabaseKey constants to match your project\n'
+                  '- Rebuild and run the app\n',
                 ),
               ],
             ),

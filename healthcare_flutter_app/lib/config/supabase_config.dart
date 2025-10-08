@@ -1,50 +1,56 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// PUBLIC_INTERFACE
 class SupabaseConfig {
+  /// Hardcoded Supabase configuration (development/demo)
+  /// Replace with your actual project URL and anon/public key.
+  static const String supabaseUrl = 'https://dzrdewhocvijofmcmxeu.supabase.co';
+  static const String supabaseKey = 'public-anon-key-hardcoded';
+
   static String? _effectiveUrl;
   static String _lastConnectionMessage = '';
-  
+  static bool _initialized = false;
+  static Completer<void>? _initCompleter;
+
   /// Maximum retries for initialization
   static const int _maxInitRetries = 3;
-  
+
   /// Base delay for exponential backoff (milliseconds)
   static const int _baseDelayMs = 1000;
 
   /// Normalize and validate a Supabase URL
   static String _normalizeUrl(String url) {
     var normalized = url.trim();
-    
+
     // Ensure https:// prefix
     if (!normalized.startsWith('https://')) {
       normalized = 'https://${normalized.replaceAll('http://', '')}';
     }
-    
+
     // Remove trailing slashes
     while (normalized.endsWith('/')) {
       normalized = normalized.substring(0, normalized.length - 1);
     }
-    
+
     return normalized;
   }
 
   /// Validate URL format and return list of issues
   static List<String> _validateUrl(String url) {
     final errors = <String>[];
-    
+
     if (!url.startsWith('https://')) {
       errors.add('must start with "https://"');
     }
-    
+
     if (!url.contains('.supabase.co')) {
       errors.add('must contain ".supabase.co"');
     }
-    
+
     if (url.contains('supabase co')) {
       errors.add('contains "supabase co" (with a space) which is invalid; use ".supabase.co"');
     }
@@ -67,7 +73,8 @@ class SupabaseConfig {
     try {
       final uri = Uri.parse('$url/auth/v1/');
       final response = await http.head(uri);
-      return response.statusCode < 500; // Accept any response that isn't a server error
+      // Accept any response that isn't a server error
+      return response.statusCode < 500;
     } catch (e) {
       debugPrint('Connectivity check failed: $e');
       return false;
@@ -75,97 +82,113 @@ class SupabaseConfig {
   }
 
   /// PUBLIC_INTERFACE
-  /// Initialize Supabase client using environment variables.
+  /// Initialize Supabase client using the hardcoded constants in this file.
   ///
-  /// Expects SUPABASE_URL and SUPABASE_KEY in .env.
-  /// For backward compatibility, also supports SUPABASE_ANON_KEY if SUPABASE_KEY is not present.
-  /// This method does NOT load dotenv; ensure dotenv is loaded before calling this.
+  /// This is idempotent and safe to call multiple times concurrently.
+  /// Connection status messages are available via [lastConnectionMessage].
   static Future<void> initialize() async {
-    // Read env vars (dotenv must be loaded already)
-    var rawUrl = dotenv.env['SUPABASE_URL'];
-    final key = (dotenv.env['SUPABASE_KEY'] ?? dotenv.env['SUPABASE_ANON_KEY'])?.trim();
+    // Idempotent guard: if already initialized, return immediately.
+    if (_initialized) return;
 
-    if (rawUrl == null || rawUrl.isEmpty || key == null || key.isEmpty) {
-      final msg =
-          'Supabase environment variables are missing. Ensure SUPABASE_URL and SUPABASE_KEY are set in .env '
-          '(SUPABASE_ANON_KEY is supported as a fallback).';
-      _lastConnectionMessage = '[Supabase] Initialization failed: Missing environment variables';
-      if (kDebugMode) {
-        debugPrint(msg);
-      }
-      throw StateError(msg);
+    // If an initialization is already in progress, wait for it.
+    if (_initCompleter != null) {
+      return _initCompleter!.future;
     }
 
-    // Normalize URL
-    rawUrl = _normalizeUrl(rawUrl);
-    
-    // Validate URL format
-    final errors = _validateUrl(rawUrl);
-    if (errors.isNotEmpty) {
-      final msg =
-          'Invalid SUPABASE_URL detected in .env: "$rawUrl". Issues: ${errors.join('; ')}.\n'
-          'Example of a valid URL: https://dzrdewhocvijofmcmxeu.supabase.co';
-      _lastConnectionMessage = '[Supabase] Initialization failed: Invalid URL format (${errors.join(', ')})';
-      if (kDebugMode) {
-        debugPrint(msg);
-      }
-      throw StateError(msg);
-    }
+    _initCompleter = Completer<void>();
 
-    // Initialize with retries
-    Exception? lastError;
-    for (var attempt = 1; attempt <= _maxInitRetries; attempt++) {
-      try {
+    try {
+      var rawUrl = _normalizeUrl(supabaseUrl);
+      final key = supabaseKey.trim();
+
+      // Basic validation for presence
+      if (rawUrl.isEmpty || key.isEmpty) {
+        final msg =
+            'Supabase configuration constants are missing. Ensure supabaseUrl and supabaseKey are set in lib/config/supabase_config.dart.';
+        _lastConnectionMessage = '[Supabase] Initialization failed: Missing configuration constants';
         if (kDebugMode) {
-          debugPrint('Supabase initialization attempt $attempt of $_maxInitRetries...');
+          debugPrint(msg);
         }
+        throw StateError(msg);
+      }
 
-        // Check connectivity first
-        final isConnected = await _checkConnectivity(rawUrl);
-        if (!isConnected) {
-          throw StateError('Failed to connect to Supabase URL: $rawUrl');
+      // Validate URL format
+      final errors = _validateUrl(rawUrl);
+      if (errors.isNotEmpty) {
+        final msg =
+            'Invalid Supabase URL in lib/config/supabase_config.dart: "$rawUrl". Issues: ${errors.join('; ')}.\n'
+            'Example of a valid URL: https://dzrdewhocvijofmcmxeu.supabase.co';
+        _lastConnectionMessage = '[Supabase] Initialization failed: Invalid URL format (${errors.join(', ')})';
+        if (kDebugMode) {
+          debugPrint(msg);
         }
+        throw StateError(msg);
+      }
 
-        await Supabase.initialize(
-          url: rawUrl,
-          anonKey: key,
-          debug: kDebugMode,
-        );
-
-        _effectiveUrl = rawUrl;
-        
-        // Extract host from URL for connection message
-        String host = rawUrl;
+      // Initialize with retries
+      Exception? lastError;
+      for (var attempt = 1; attempt <= _maxInitRetries; attempt++) {
         try {
-          final uri = Uri.parse(rawUrl);
-          host = uri.host.isNotEmpty ? uri.host : rawUrl;
-        } catch (_) {
-          // Keep rawUrl if parsing fails
-        }
-        
-        _lastConnectionMessage = '[Supabase] Connected to $host';
-        if (kDebugMode) {
-          debugPrint(_lastConnectionMessage);
-        }
-        return; // Success
-      } catch (e) {
-        lastError = e is Exception ? e : Exception(e.toString());
-        if (attempt < _maxInitRetries) {
-          // Exponential backoff
-          final delayMs = (_baseDelayMs * pow(2, attempt - 1)).toInt();
           if (kDebugMode) {
-            debugPrint('Initialization attempt $attempt failed, retrying in ${delayMs}ms: $e');
+            debugPrint('Supabase initialization attempt $attempt of $_maxInitRetries...');
           }
-          await Future.delayed(Duration(milliseconds: delayMs));
+
+          // Check connectivity first
+          final isConnected = await _checkConnectivity(rawUrl);
+          if (!isConnected) {
+            throw StateError('Failed to connect to Supabase URL: $rawUrl');
+          }
+
+          await Supabase.initialize(
+            url: rawUrl,
+            anonKey: key,
+            debug: kDebugMode,
+          );
+
+          _effectiveUrl = rawUrl;
+
+          // Extract host from URL for connection message
+          String host = rawUrl;
+          try {
+            final uri = Uri.parse(rawUrl);
+            host = uri.host.isNotEmpty ? uri.host : rawUrl;
+          } catch (_) {
+            // Keep rawUrl if parsing fails
+          }
+
+          _lastConnectionMessage = '[Supabase] Connected to $host';
+          if (kDebugMode) {
+            debugPrint(_lastConnectionMessage);
+          }
+
+          _initialized = true;
+          _initCompleter!.complete();
+          return; // Success
+        } catch (e) {
+          lastError = e is Exception ? e : Exception(e.toString());
+          if (attempt < _maxInitRetries) {
+            // Exponential backoff
+            final delayMs = (_baseDelayMs * pow(2, attempt - 1)).toInt();
+            if (kDebugMode) {
+              debugPrint('Initialization attempt $attempt failed, retrying in ${delayMs}ms: $e');
+            }
+            await Future.delayed(Duration(milliseconds: delayMs));
+          }
         }
       }
-    }
 
-    // If we get here, all retries failed
-    final msg = 'Failed to initialize Supabase after $_maxInitRetries attempts. Last error: $lastError';
-    _lastConnectionMessage = '[Supabase] Initialization failed: $lastError';
-    debugPrint(msg);
-    throw StateError(msg);
+      // If we get here, all retries failed
+      final msg = 'Failed to initialize Supabase after $_maxInitRetries attempts. Last error: $lastError';
+      _lastConnectionMessage = '[Supabase] Initialization failed: $lastError';
+      debugPrint(msg);
+      throw StateError(msg);
+    } catch (e) {
+      // Ensure any waiters see the error
+      if (!(_initCompleter?.isCompleted ?? true)) {
+        _initCompleter!.completeError(e);
+      }
+      rethrow;
+    }
   }
 
   /// PUBLIC_INTERFACE
