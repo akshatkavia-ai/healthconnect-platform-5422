@@ -1,306 +1,133 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-import 'supabase_config.dart';
-import 'services/todo_service.dart';
+import 'config/supabase_config.dart';
+import 'config/theme_config.dart';
+import 'providers/auth_provider.dart';
+import 'providers/patient_provider.dart';
+import 'providers/appointment_provider.dart';
+import 'providers/medical_record_provider.dart';
 
-/// PUBLIC_INTERFACE
-/// Main entrypoint. Initializes Supabase exactly once before running the app.
-/// Shows a minimal Todos list that reads from the 'todos' table.
+import 'screens/auth/login_screen.dart';
+import 'screens/auth/register_screen.dart';
+import 'screens/patient/patient_dashboard_screen.dart';
+import 'screens/patient/patient_registration_screen.dart';
+import 'screens/doctor/doctor_dashboard_screen.dart';
+import 'screens/appointments/appointments_list_screen.dart';
+import 'screens/appointments/appointment_booking_screen.dart';
+import 'screens/appointments/appointment_detail_screen.dart';
+import 'screens/medical_records/medical_records_list_screen.dart';
+import 'screens/medical_records/medical_record_detail_screen.dart';
+import 'widgets/health_check.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   String? initError;
-  try {
-    // Validate config in debug to catch common mistakes.
-    SupabaseConfig.debugValidate();
 
-    // Initialize Supabase using values from SupabaseConfig. Keep existing flow intact.
-    await Supabase.initialize(
-      url: SupabaseConfig.url,
-      anonKey: SupabaseConfig.anonKey,
-    );
+  try {
+    // 1️⃣ Load environment variables first
+    await dotenv.load(fileName: '.env');
+    final supabaseUrl = dotenv.env['SUPABASE_URL']?.trim();
+    final supabaseKey =
+        (dotenv.env['SUPABASE_KEY'] ?? dotenv.env['SUPABASE_ANON_KEY'])?.trim();
+
+    print('Loaded SUPABASE_URL=$supabaseUrl');
+    print('Loaded SUPABASE_KEY=${supabaseKey != null ? "[hidden]" : "null"}');
+
+    // 2️⃣ Validate presence
+    if (supabaseUrl == null || supabaseUrl.isEmpty || supabaseKey == null || supabaseKey.isEmpty) {
+      throw StateError('SUPABASE_URL or SUPABASE_KEY is missing in .env');
+    }
+
+    // 3️⃣ Initialize Supabase safely
+    await SupabaseConfig.initialize(url: supabaseUrl, anonKey: supabaseKey);
+    print('Supabase initialized successfully!');
   } catch (e) {
     initError = 'Supabase initialization failed: $e';
   }
 
-  runApp(MyApp(
-    showPlaceholder: false,
-    initError: initError,
-  ));
+  // 4️⃣ Run the app
+  runApp(MyApp(initError: initError));
 }
 
-/// PUBLIC_INTERFACE
-/// Root widget. Defaults to a simple placeholder to allow quick widget tests
-/// to instantiate `const MyApp()` without running the async initialization.
 class MyApp extends StatelessWidget {
-  final bool showPlaceholder;
   final String? initError;
+  const MyApp({super.key, this.initError});
 
-  const MyApp({
-    super.key,
-    this.showPlaceholder = true,
-    this.initError,
-  });
+  GoRouter _buildRouter(AuthProvider auth) {
+    return GoRouter(
+      initialLocation: '/login',
+      refreshListenable: auth,
+      redirect: (context, state) {
+        final loggedIn = auth.isAuthenticated;
+        final loggingIn =
+            state.matchedLocation == '/login' || state.matchedLocation == '/register';
+
+        if (!loggedIn && !loggingIn) return '/login';
+        if (loggedIn && loggingIn) return auth.role == 'doctor' ? '/doctor' : '/patient';
+        return null;
+      },
+      routes: [
+        GoRoute(path: '/login', builder: (context, _) => const LoginScreen()),
+        GoRoute(path: '/register', builder: (context, _) => const RegisterScreen()),
+        GoRoute(path: '/patient', builder: (context, _) => const PatientDashboardScreen()),
+        GoRoute(path: '/patient/register', builder: (context, _) => const PatientRegistrationScreen()),
+        GoRoute(path: '/doctor', builder: (context, _) => const DoctorDashboardScreen()),
+        GoRoute(
+          path: '/appointments',
+          builder: (context, _) => const AppointmentsListScreen(),
+          routes: [
+            GoRoute(path: 'book', builder: (context, _) => const AppointmentBookingScreen()),
+            GoRoute(path: ':id', builder: (context, state) =>
+                AppointmentDetailScreen(id: state.pathParameters['id']!)),
+          ],
+        ),
+        GoRoute(
+          path: '/records',
+          builder: (context, _) => const MedicalRecordsListScreen(),
+          routes: [
+            GoRoute(path: ':id', builder: (context, state) =>
+                MedicalRecordDetailScreen(id: state.pathParameters['id']!)),
+          ],
+        ),
+        GoRoute(path: '/health', builder: (context, _) => const HealthCheck()),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (showPlaceholder) {
-      return MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          appBar: AppBar(
-            title: const Text('healthcare_flutter_app'),
-            centerTitle: true,
-          ),
-          body: const Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 12),
-                Text('healthcare_flutter_app App is being generated...'),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
     if (initError != null) {
       return MaterialApp(
+        title: 'HealthConnect - Error',
         debugShowCheckedModeBanner: false,
-        title: 'Supabase Init Error',
-        home: _InitErrorScreen(message: initError!),
+        theme: ThemeConfig.theme,
+        home: Scaffold(
+          appBar: AppBar(title: const Text('Configuration Required')),
+          body: Center(child: Text(initError!)),
+        ),
       );
     }
 
-    return const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Todos',
-      home: TodosPage(),
-    );
-  }
-}
-
-class _InitErrorScreen extends StatelessWidget {
-  final String message;
-  const _InitErrorScreen({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Configuration Required')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: ListView(
-              children: [
-                const Text(
-                  'Supabase Initialization Error',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  message,
-                  style: const TextStyle(color: Colors.redAccent),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'How to fix',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  '- Provide your project credentials via --dart-define:\n'
-                  '  flutter run \\\n'
-                  '    --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co \\\n'
-                  '    --dart-define=SUPABASE_ANON_KEY=YOUR_ANON_KEY\n\n'
-                  '- Or update the fallbacks in lib/supabase_config.dart (development only).',
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// PUBLIC_INTERFACE
-/// Minimal Todos page that uses TodoService for all data operations.
-/// It renders a list via FutureBuilder, shows loading/error states,
-/// and includes a simple input to add a new todo.
-class TodosPage extends StatefulWidget {
-  const TodosPage({super.key});
-
-  @override
-  State<TodosPage> createState() => _TodosPageState();
-}
-
-class _TodosPageState extends State<TodosPage> {
-  final TodoService _service = TodoService();
-  late Future<List<Map<String, dynamic>>> _future;
-  final TextEditingController _controller = TextEditingController();
-  bool _adding = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = _loadTodos();
-  }
-
-  Future<List<Map<String, dynamic>>> _loadTodos() {
-    // Delegate to the service for fetching todos.
-    return _service.getTodos();
-  }
-
-  Future<void> _addTodo() async {
-    final title = _controller.text.trim();
-    if (title.isEmpty) return;
-    setState(() {
-      _adding = true;
-    });
-    try {
-      await _service.addTodo(title);
-      // Refresh list after successful insert
-      setState(() {
-        _future = _loadTodos();
-      });
-      // Avoid using controller after await in async context rules: only primitive updates.
-      // Clearing controller text safely before awaiting in future usage; here directly after await,
-      // we choose to update primitive state only. For UI, rely on text being kept; optional clear via setState.
-    } catch (e) {
-      // Surface as a snackbar using current context synchronously in build via a flag if needed.
-      // Keeping minimal UI changes per instructions; ignoring elaborate error UI here.
-    } finally {
-      setState(() {
-        _adding = false;
-        _controller.text = '';
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Widget _buildAddTodo() {
-    return Padding(
-      padding: const EdgeInsets.all(12.0),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              decoration: const InputDecoration(
-                labelText: 'New todo title',
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton.icon(
-            onPressed: _adding ? null : _addTodo,
-            icon: _adding
-                ? const SizedBox(
-                    height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.add),
-            label: Text(_adding ? 'Adding...' : 'Add'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Todos')),
-      body: Column(
-        children: [
-          _buildAddTodo(),
-          Expanded(
-            child: FutureBuilder<List<Map<String, dynamic>>>(
-              future: _future,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        'Error loading todos: ${snapshot.error}',
-                        style: const TextStyle(color: Colors.red),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  );
-                }
-
-                final todos = snapshot.data ?? const <Map<String, dynamic>>[];
-                if (todos.isEmpty) {
-                  return const Center(child: Text('No todos found'));
-                }
-
-                return ListView.separated(
-                  itemCount: todos.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final todo = todos[index];
-                    final name =
-                        (todo['name'] ?? todo['title'] ?? '').toString().trim();
-                    final isDone = (todo['is_complete'] ??
-                            todo['is_done'] ??
-                            todo['completed'] ??
-                            false) ==
-                        true;
-                    final idVal = todo['id'];
-                    final int? id = idVal is int
-                        ? idVal
-                        : int.tryParse(idVal?.toString() ?? '');
-
-                    return ListTile(
-                      title: Text(name.isEmpty ? '(untitled)' : name),
-                      leading: IconButton(
-                        icon: Icon(
-                          isDone ? Icons.check_circle : Icons.radio_button_unchecked,
-                          color: isDone ? Colors.green : Colors.grey,
-                        ),
-                        onPressed: id == null
-                            ? null
-                            : () async {
-                                // Toggle status via service then refresh
-                                await _service.updateTodoStatus(id, !isDone);
-                                setState(() {
-                                  _future = _loadTodos();
-                                });
-                              },
-                      ),
-                      trailing: id == null
-                          ? null
-                          : IconButton(
-                              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                              onPressed: () async {
-                                await _service.deleteTodo(id);
-                                setState(() {
-                                  _future = _loadTodos();
-                                });
-                              },
-                            ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => PatientProvider()),
+        ChangeNotifierProvider(create: (_) => AppointmentProvider()),
+        ChangeNotifierProvider(create: (_) => MedicalRecordProvider()),
+      ],
+      child: Builder(builder: (context) {
+        final auth = context.watch<AuthProvider>();
+        return MaterialApp.router(
+          title: 'HealthConnect',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeConfig.theme,
+          routerConfig: _buildRouter(auth),
+        );
+      }),
     );
   }
 }

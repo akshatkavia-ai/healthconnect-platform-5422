@@ -1,167 +1,76 @@
-import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart';
 
 /// PUBLIC_INTERFACE
+/// Centralized Supabase configuration and client access.
+/// Initializes the Supabase client using values provided at runtime (e.g., from .env).
 class SupabaseConfig {
-  /// Hardcoded Supabase configuration (development/demo)
-  /// Replace with your actual project URL and anon/public key.
-  static const String supabaseUrl = 'https://dzrdewhocvijofmcmxeu.supabase.co';
-  static const String supabaseKey = 'public-anon-key-hardcoded';
+  /// Supabase client instance, set during initialize().
+  static late final SupabaseClient client;
 
-  static String? _effectiveUrl;
-  static String _lastConnectionMessage = '';
+  // Internal state used by health check and diagnostics.
   static bool _initialized = false;
-  static Completer<void>? _initCompleter;
+  static String _lastConnectionMessage = '';
+  static String _effectiveUrl = '';
 
-  /// Normalize and validate a Supabase URL
-  static String _normalizeUrl(String url) {
-    var normalized = url.trim();
-
-    // Ensure https:// prefix
-    if (!normalized.startsWith('https://')) {
-      normalized = 'https://${normalized.replaceAll('http://', '')}';
+  /// PUBLIC_INTERFACE
+  /// Initialize Supabase client once using the provided URL and anon/publishable key.
+  /// Also records connection info for health checks and diagnostics.
+  static Future<void> initialize({required String url, required String anonKey}) async {
+    if (kDebugMode) {
+      debugPrint('Initializing Supabase with URL=$url');
     }
 
-    // Remove trailing slashes
-    while (normalized.endsWith('/')) {
-      normalized = normalized.substring(0, normalized.length - 1);
-    }
+    // Create client and assign to both our static field and Supabase.instance for global access.
+    client = Supabase.instance.client = SupabaseClient(url, anonKey);
 
-    return normalized;
-  }
+    // Track initialization state and diagnostics.
+    _effectiveUrl = url.trim();
+    _initialized = true;
 
-  /// Validate URL format and return list of issues
-  static List<String> _validateUrl(String url) {
-    final errors = <String>[];
-
-    if (!url.startsWith('https://')) {
-      errors.add('must start with "https://"');
-    }
-
-    if (!url.contains('.supabase.co')) {
-      errors.add('must contain ".supabase.co"');
-    }
-
-    if (url.contains('supabase co')) {
-      errors.add('contains "supabase co" (with a space) which is invalid; use ".supabase.co"');
-    }
-
-    Uri? parsed;
+    // Derive host for user-friendly message.
+    String host = _effectiveUrl;
     try {
-      parsed = Uri.parse(url);
-      if (parsed.host.isEmpty) {
-        errors.add('host is empty');
+      final uri = Uri.parse(_effectiveUrl);
+      if (uri.host.isNotEmpty) {
+        host = uri.host;
       }
     } catch (_) {
-      errors.add('not a valid URI');
+      // keep raw url if parsing fails
     }
+    _lastConnectionMessage = '[Supabase] Connected to $host';
 
-    return errors;
-  }
-
-  /// PUBLIC_INTERFACE
-  /// Initialize Supabase client using the hardcoded constants in this file.
-  ///
-  /// - No .env dependency
-  /// - No pre-connectivity blocker (Supabase.initialize itself is fast and local)
-  /// - Idempotent and safe to call multiple times concurrently.
-  /// Connection status messages are available via [lastConnectionMessage].
-  static Future<void> initialize() async {
-    // Idempotent guard: if already initialized, return immediately.
-    if (_initialized) return;
-
-    // If an initialization is already in progress, wait for it.
-    if (_initCompleter != null) {
-      return _initCompleter!.future;
-    }
-
-    _initCompleter = Completer<void>();
-
-    try {
-      final rawUrl = _normalizeUrl(supabaseUrl);
-      final key = supabaseKey.trim();
-
-      // Basic validation for presence
-      if (rawUrl.isEmpty || key.isEmpty) {
-        final msg =
-            'Supabase configuration constants are missing. Ensure supabaseUrl and supabaseKey are set in lib/config/supabase_config.dart.';
-        _lastConnectionMessage =
-            '[Supabase] Initialization failed: Missing configuration constants';
-        if (kDebugMode) {
-          debugPrint(msg);
-        }
-        throw StateError(msg);
-      }
-
-      // Validate URL format
-      final errors = _validateUrl(rawUrl);
-      if (errors.isNotEmpty) {
-        final msg =
-            'Invalid Supabase URL in lib/config/supabase_config.dart: "$rawUrl". Issues: ${errors.join('; ')}.\n'
-            'Example of a valid URL: https://dzrdewhocvijofmcmxeu.supabase.co';
-        _lastConnectionMessage =
-            '[Supabase] Initialization failed: Invalid URL format (${errors.join(', ')})';
-        if (kDebugMode) {
-          debugPrint(msg);
-        }
-        throw StateError(msg);
-      }
-
-      // Initialize Supabase once (no pre-connectivity guard)
-      await Supabase.initialize(
-        url: rawUrl,
-        anonKey: key,
-        debug: kDebugMode,
-      );
-
-      _effectiveUrl = rawUrl;
-
-      // Extract host from URL for connection message
-      String host = rawUrl;
-      try {
-        final uri = Uri.parse(rawUrl);
-        host = uri.host.isNotEmpty ? uri.host : rawUrl;
-      } catch (_) {
-        // Keep rawUrl if parsing fails
-      }
-
-      _lastConnectionMessage = '[Supabase] Connected to $host';
-      if (kDebugMode) {
-        debugPrint(_lastConnectionMessage);
-      }
-
-      _initialized = true;
-      _initCompleter!.complete();
-      return; // Success
-    } catch (e) {
-      // Friendly message and propagate error so the app can surface a configuration screen if truly invalid.
-      _lastConnectionMessage = '[Supabase] Initialization failed: $e';
-      if (kDebugMode) {
-        debugPrint(_lastConnectionMessage);
-      }
-      if (!(_initCompleter?.isCompleted ?? true)) {
-        _initCompleter!.completeError(e);
-      }
-      rethrow;
+    if (kDebugMode) {
+      debugPrint(_lastConnectionMessage);
     }
   }
 
   /// PUBLIC_INTERFACE
-  /// Returns the current Supabase client instance.
-  static SupabaseClient get client => Supabase.instance.client;
+  /// Access the initialized Supabase client (alias for [client]).
+  static SupabaseClient get instanceClient => client;
 
   /// PUBLIC_INTERFACE
-  /// Returns the effective Supabase URL used after initialization, or empty string if not initialized yet.
-  static String get effectiveSupabaseUrl => _effectiveUrl ?? '';
+  /// Returns true after initialize() is successfully called.
+  static bool get isInitialized => _initialized;
 
   /// PUBLIC_INTERFACE
-  /// Returns the last connection message, indicating success or failure status.
-  /// On success: '[Supabase] Connected to {host}'
-  /// On failure: '[Supabase] Initialization failed: {reason}'
+  /// Returns the effective Supabase URL used for initialization.
+  static String get effectiveSupabaseUrl => _effectiveUrl;
+
+  /// PUBLIC_INTERFACE
+  /// Returns the latest connection status message (success or failure details).
   static String get lastConnectionMessage => _lastConnectionMessage;
 
-  /// PUBLIC_INTERFACE
-  /// Whether Supabase.initialize has successfully completed.
-  static bool get isInitialized => _initialized;
+  /// Debug validation (optional)
+  static void debugValidate() {
+    // With `late final`, client will be non-null after initialize. This method can be used
+    // to log a message if initialization hasn't occurred yet in a guarded context.
+    try {
+      // access to ensure it's initialized
+      // ignore: unnecessary_statements
+      client;
+    } catch (_) {
+      if (kDebugMode) debugPrint('Supabase client not yet initialized.');
+    }
+  }
 }
