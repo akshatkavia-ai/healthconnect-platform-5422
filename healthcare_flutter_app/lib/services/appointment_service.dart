@@ -48,7 +48,7 @@ class AppointmentService {
         .eq('id', a.id)
         .select()
         .single();
-    return Appointment.fromMap(data as Map<String, dynamic>);
+    return Appointment.fromMap(data);
   }
 
   /// PUBLIC_INTERFACE

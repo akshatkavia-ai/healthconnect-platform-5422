@@ -7,10 +7,10 @@ Flutter app for HealthConnect.
 This app uses Supabase. Create a `.env` file at the project root (same level as `pubspec.yaml`) based on `.env.example`:
 
 ```
-SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
-SUPABASE_KEY=YOUR_SUPABASE_ANON_KEY
+SUPABASE_URL=https://dzrdewhocvijofmcmxeu.supabase.co
+SUPABASE_KEY=<your-anon-key>
 # Optional legacy alias (still supported)
-# SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+# SUPABASE_ANON_KEY=<your-anon-key>
 ```
 
 Notes:
